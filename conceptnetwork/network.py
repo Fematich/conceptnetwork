@@ -28,7 +28,7 @@ class Network(object):
 
         Defaults to a concatenation of the encodings of the multiple concepts"""
         features = dict()
-        for _, concept in self.concepts.iteritems():
+        for _, concept in self.concepts.items():
             features.update(concept.encode())
         return features
 
