@@ -1,0 +1,83 @@
+#!/usr/bin/python
+
+import logging
+from collections import defaultdict
+import abc
+
+
+class Concept(object):
+    """Base class for Concepts"""
+    def __init__(self):
+        __metaclass__ = abc.ABCMeta
+
+    def __repr__(self):
+        return self.__class__.__name__ + self.version
+
+    @abc.abstractmethod
+    def _get_test_input(self):
+        """This function will return a test input for encoding,
+        this function is only required for testing"""
+        raise NotImplementedError(
+            'The base class needs to implement "get_test_input"')
+
+    @abc.abstractmethod
+    def encode(self, raw_input):
+        """This function is responsible for encoding an raw_input object to a 
+        dict of feature names and a corresponding TensorFlow Example protobuffers"""
+        raise NotImplementedError(
+            'The base class needs to implement "encode"')
+
+    @abc.abstractmethod
+    def featdef(self):
+        """This function defines thet interface between encode and model:
+            Returns a dictionary of feature names and tf FeatureEncodingTypes"""
+        raise NotImplementedError(
+            'The base class needs to implement "featdef"')
+
+    @abc.abstractmethod
+    def model(self, features):
+        """This function takes a dictionary of tensors(features) and 
+        specifies the Tensorflow operations to transform these into a single tensor"""
+        raise NotImplementedError(
+            'The base class needs to implement "model"')
+
+    @classmethod
+    def get_children(cls):
+        """Helper function to get the list of all children in the global namespace"""
+        import sys
+        import inspect
+        subclasses = []
+        callers_module = sys._getframe(1).f_globals['__name__']
+        classes = inspect.getmembers(
+            sys.modules[callers_module], inspect.isclass)
+        for name, obj in classes:
+            if (obj is not cls) and (cls in inspect.getmro(obj)):
+                subclasses.append((name, obj))
+        return subclasses
+
+    @classmethod
+    def _test(cls):
+        """test is resposible for testing an individual Concept class"""
+        import tensorflow as tf
+
+        self = cls()
+        logging.info('\n' + '*' * 50 + '\n' + '*' * 50)
+        logging.info('Test Concept : %s', self)
+        features = self.encode(self._get_test_input())
+        example = tf.train.Example(
+            features=tf.train.Features(feature=features))
+        serialized_example = example.SerializeToString()
+        logging.info('Successfully serialized tfrecord')
+
+        reconstructed_features = tf.parse_single_example(
+            serialized_example,
+            features=self.featdef(),
+            name='reconstruct_features')
+        print(reconstructed_features)
+        logging.info('Successfully reconstructed tfrecord')
+
+        embedding = self.model(reconstructed_features)
+        with tf.Session():
+            tf.global_variables_initializer().run()
+            vector = embedding.eval()
+            logging.info('vector : %s', str(vector))
