@@ -12,7 +12,7 @@ class Network(object):
         self.concepts = dict()
 
     def __repr__(self):
-        return self.__class__.__name__ + self.version + '_' + '|'.join(self.concepts)
+        return self.__class__.__name__ + self.version + '_' + '|'.join(self.concepts.keys())
 
     @abc.abstractmethod
     def _get_test_input(self):
@@ -38,7 +38,7 @@ class Network(object):
         Returns a dictionary of feature names and tf FeatureEncodingTypes
         Defaults to a concatenation of the encodings of the multiple concepts"""
         features_def = dict()
-        for _, concept in self.concepts:
+        for _, concept in self.concepts.items():
             features_def.update(concept.featdef())
         return features_def
 
