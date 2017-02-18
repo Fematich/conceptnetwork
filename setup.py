@@ -10,7 +10,7 @@ with open(path.join(here, 'README.md'), encoding='utf-8') as f:
 
 setup(
     name='conceptnetwork',
-    version='0.0.1',
+    version='0.0.2',
 
     description='TensorFlow&CloudML helper function for complex data processing.',
     long_description=long_description,
@@ -21,7 +21,7 @@ setup(
     author='Matthias Feys',
     author_email='matthiasfeys@gmail.com',
 
-    packages=find_packages(exclude=['docs', 'tests']),
+    packages=find_packages(exclude=['examples','docs', 'tests']),
 
     install_requires=['tensorflow==1.0.0'],
 )

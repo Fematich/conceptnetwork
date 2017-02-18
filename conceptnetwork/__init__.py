@@ -1,2 +1,2 @@
-from concept import Concept
-from network import Network
+from conceptnetwork.concept import Concept
+from conceptnetwork.network import Network

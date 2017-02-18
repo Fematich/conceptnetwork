@@ -6,7 +6,7 @@ Installation
 ------------
 To install this module run:
 ```
-pip install git+https://github.com/Fematich/conceptnetwork.git
+pip install --upgrade git+https://github.com/Fematich/conceptnetwork.git
 ```
 
 Usage
