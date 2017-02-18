@@ -29,7 +29,7 @@ class Network(object):
         Defaults to a concatenation of the encodings of the multiple concepts"""
         features = dict()
         for _, concept in self.concepts.items():
-            features.update(concept.encode())
+            features.update(concept.encode(raw_input))
         return features
 
     @abc.abstractmethod
