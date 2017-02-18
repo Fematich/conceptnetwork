@@ -7,6 +7,7 @@ import abc
 
 class Concept(object):
     """Base class for Concepts"""
+
     def __init__(self):
         __metaclass__ = abc.ABCMeta
 
@@ -73,7 +74,6 @@ class Concept(object):
             serialized_example,
             features=self.featdef(),
             name='reconstruct_features')
-        print(reconstructed_features)
         logging.info('Successfully reconstructed tfrecord')
 
         embedding = self.model(reconstructed_features)
