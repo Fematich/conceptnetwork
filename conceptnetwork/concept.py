@@ -22,7 +22,7 @@ class Concept(object):
             'The base class needs to implement "get_test_input"')
 
     @abc.abstractmethod
-    def encode(self, raw_input):
+    def preprocess(self, raw_input):
         """This function is responsible for encoding an raw_input object to a 
         dict of feature names and a corresponding TensorFlow Example protobuffers"""
         raise NotImplementedError(
@@ -36,7 +36,7 @@ class Concept(object):
             'The base class needs to implement "featdef"')
 
     @abc.abstractmethod
-    def model(self, features):
+    def inference(self, features):
         """This function takes a dictionary of tensors(features) and 
         specifies the Tensorflow operations to transform these into a single tensor"""
         raise NotImplementedError(
@@ -64,7 +64,7 @@ class Concept(object):
         self = cls()
         logging.info('\n' + '*' * 50 + '\n' + '*' * 50)
         logging.info('Test Concept : %s', self)
-        features = self.encode(self._get_test_input())
+        features = self.preprocess(self._get_test_input())
         example = tf.train.Example(
             features=tf.train.Features(feature=features))
         serialized_example = example.SerializeToString()
@@ -76,7 +76,7 @@ class Concept(object):
             name='reconstruct_features')
         logging.info('Successfully reconstructed tfrecord')
 
-        embedding = self.model(reconstructed_features)
+        embedding = self.inference(reconstructed_features)
         with tf.Session():
             tf.global_variables_initializer().run()
             vector = embedding.eval()
