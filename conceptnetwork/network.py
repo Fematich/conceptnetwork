@@ -240,11 +240,11 @@ class Network(object):
         new_features = dict()
         for k, v in features.iteritems():
             v_length = int(v.get_shape()[0])
-            new_features[k] = tf.reshape(v, (v_length, 1))
+            new_features[k] = tf.reshape(v, (1, v_length))
         new_labels = dict()
         for k, v in labels.iteritems():
             v_length = int(v.get_shape()[0])
-            new_labels[k] = tf.reshape(v, (v_length, 1))
+            new_labels[k] = tf.reshape(v, (1, v_length))
         predictions = self.inference(new_features)
         loss = self.loss(predictions, new_labels)
         with tf.Session():
