@@ -8,8 +8,9 @@ import abc
 class Concept(object):
     """Base class for Concepts"""
 
-    def __init__(self):
+    def __init__(self,target=False):
         __metaclass__ = abc.ABCMeta
+        self.target=target
 
     def __repr__(self):
         return self.__class__.__name__ + self.version

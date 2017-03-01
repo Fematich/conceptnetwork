@@ -12,7 +12,27 @@ class Network(object):
     def __init__(self):
         __metaclass__ = abc.ABCMeta
         self.concepts = dict()
-        self.label = None
+        self._feature_names = set()
+        self._target_names = set()
+
+    @property
+    def feature_names(self):
+        if len(self._feature_names) < 1:
+            self._targetandfeaturenames()
+        return self._feature_names
+
+    @property
+    def target_names(self):
+        if len(self._target_names) < 1:
+            self._targetandfeaturenames()
+        return self._target_names
+
+    def _targetandfeaturenames(self):
+        for cname, concept in self.concepts.items():
+            if concept.target:
+                self._target_names.add(cname)
+            else:
+                self._feature_names.add(cname)
 
     def _select_features(self, concept_key, features):
         """Select and translate features for this concept_key"""
@@ -22,11 +42,20 @@ class Network(object):
                 cfeatures['_'.join(k.split('_')[1:])] = v
         return cfeatures
 
-    def get_vectors(self, features):
+    def get_featurevectors(self, features):
         vectors = dict()
         for cname, concept in self.concepts.items():
-            vectors[cname] = concept.inference(
-                self._select_features(cname, features))
+            if not concept.target:
+                vectors[cname] = concept.inference(
+                    self._select_features(cname, features))
+        return vectors
+
+    def get_targetvectors(self, features):
+        vectors = dict()
+        for cname, concept in self.concepts.items():
+            if concept.target:
+                vectors[cname] = concept.inference(
+                    self._select_features(cname, features))
         return vectors
 
     def __repr__(self):
@@ -51,8 +80,6 @@ class Network(object):
             cfeatures = concept.preprocess(raw_input)
             for k, v in cfeatures.items():
                 features[cname + '_' + k] = v
-        if self.label is not None:
-            features['label'] = label.preprocess(raw_input)
         example = tf.train.Example(
             features=tf.train.Features(feature=features))
         return example
@@ -68,8 +95,6 @@ class Network(object):
             cfeatures_def = concept.featdef()
             for k, v in cfeatures_def.items():
                 features_def[cname + '_' + k] = v
-        if self.label is not None:
-            features_def['label'] = label.featdef()
         return features_def
 
     @abc.abstractmethod
@@ -85,6 +110,10 @@ class Network(object):
         (output from inference)"""
         raise NotImplementedError(
             'The base class needs to implement "loss"')
+
+    def feature_engineering_fn(self, features, labels):
+        return self.get_featurevectors(features),\
+            self.get_targetvectors(labels)
 
     def train(self, loss):
         """This function takes a dictionary of tensors(features) and
@@ -102,7 +131,7 @@ class Network(object):
         Returns:
           A model function that can be passed to `Estimator` constructor.
         """
-        def _model_fn(features, labels, mode, input_dir):
+        def _model_fn(features, labels, mode):
             """Creates the prediction and its loss.
 
             Args:
@@ -149,11 +178,13 @@ class Network(object):
             logging.info("Reading files from %s", input_dir)
             include_target_column = (mode != tf.contrib.learn.ModeKeys.INFER)
 
-            reader_fn = tf.TFRecordReader(
-                options=tf.python_io.TFRecordOptions(
-                    compression_type=TFRecordCompressionType.GZIP))
+            def gzip_reader():
+                return tf.TFRecordReader(
+                    options=tf.python_io.TFRecordOptions(
+                        compression_type=TFRecordCompressionType.GZIP))
+            reader_fn = gzip_reader
 
-            features = tf.contrib.learn.io.read_batch_features(
+            all_features = tf.contrib.learn.io.read_batch_features(
                 file_pattern=input_dir,
                 batch_size=batch_size,
                 queue_capacity=3 * batch_size,
@@ -161,9 +192,20 @@ class Network(object):
                 feature_queue_capacity=5,
                 reader=reader_fn,
                 features=self.featdef())
-            target = None
-            if include_target_column:
-                target = features.pop('label')
+            target = dict()
+            features = dict()
+            for f_name, feature in all_features.iteritems():
+                c_name = f_name.split('_')[0]
+                if c_name in self.target_names:
+                    target[f_name] = feature
+                else:
+                    features[f_name] = feature
+            # print('features')
+            # print(features)
+            # print('target')
+            # print(target)
+            if len(target) < 1:
+                target = None
             return features, target
 
         return _input_fn
@@ -185,8 +227,29 @@ class Network(object):
             name='reconstruct_features')
         logging.info('Successfully reconstructed tfrecord')
 
-        embedding = self.inference(reconstructed_features)
+        target = dict()
+        features = dict()
+
+        for f_name, feature in reconstructed_features.iteritems():
+            c_name = f_name.split('_')[0]
+            if c_name in self.target_names:
+                target[f_name] = feature
+            else:
+                features[f_name] = feature
+        features, labels = self.feature_engineering_fn(features, target)
+        new_features = dict()
+        for k, v in features.iteritems():
+            v_length = int(v.get_shape()[0])
+            new_features[k] = tf.reshape(v, (v_length, 1))
+        new_labels = dict()
+        for k, v in labels.iteritems():
+            v_length = int(v.get_shape()[0])
+            new_labels[k] = tf.reshape(v, (v_length, 1))
+        predictions = self.inference(new_features)
+        loss = self.loss(predictions, new_labels)
         with tf.Session():
             tf.global_variables_initializer().run()
-            vector = embedding["logits"].eval()
+            vector = predictions['logits'].eval()
             logging.info('vector : %s', str(vector))
+            losses = loss.eval()
+            logging.info('loss : %s', str(losses))
