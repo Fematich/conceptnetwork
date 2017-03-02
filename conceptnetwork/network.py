@@ -2,7 +2,6 @@
 import logging
 import abc
 import re
-from collections import defaultdict
 import tensorflow as tf
 from tensorflow.python.lib.io.tf_record import TFRecordCompressionType
 
@@ -62,7 +61,7 @@ class Network(object):
     def __repr__(self):
         abrev = ''.join([s[:3] for s in re.split(
             "([A-Z][^A-Z]*)", self.__class__.__name__) if s])
-        return abrev + self.version.replace('.','') + '__' + \
+        return abrev + self.version.replace('.', '') + '__' + \
             '_'.join([c._short_repr() for c in self.concepts.values()])
 
     @abc.abstractmethod
@@ -120,7 +119,8 @@ class Network(object):
 
     def train(self, loss):
         """This function takes a dictionary of tensors(features) and
-        specifies the Tensorflow operations to transform these into a single tensor"""
+        specifies the Tensorflow operations to transform these into a
+        single tensor"""
         train_op = tf.contrib.layers.optimize_loss(
             loss=loss,
             global_step=tf.contrib.framework.get_global_step(),
@@ -140,7 +140,7 @@ class Network(object):
             Args:
               features: A dictionary of tensors keyed by the feature name.
               labels: A tensor representing the labels.
-              mode: The execution mode, as defined in tf.contrib.learn.ModeKeys.
+              mode: The execution mode, defined in tf.contrib.learn.ModeKeys.
 
             Returns:
               A tuple consisting of the prediction, loss, and train_op.
@@ -177,9 +177,7 @@ class Network(object):
               the feature names, and 2) a tensor of target labels if the mode
               is not INFER (and None, otherwise).
             """
-            input_files = sorted(list(tf.gfile.Glob(input_dir)))
             logging.info("Reading files from %s", input_dir)
-            include_target_column = (mode != tf.contrib.learn.ModeKeys.INFER)
 
             def gzip_reader():
                 return tf.TFRecordReader(
@@ -203,10 +201,6 @@ class Network(object):
                     target[f_name] = feature
                 else:
                     features[f_name] = feature
-            # print('features')
-            # print(features)
-            # print('target')
-            # print(target)
             if len(target) < 1:
                 target = None
             return features, target
@@ -265,7 +259,7 @@ class Network(object):
                 logging.info('vector : %s', str(vector))
                 losses = loss.eval()
                 logging.info('loss : %s', str(losses))
-            except tf.errors.OutOfRangeError, e:
+            except tf.errors.OutOfRangeError as e:
                 coord.request_stop(e)
             finally:
                 coord.request_stop()

@@ -2,7 +2,6 @@
 
 import logging
 import re
-from collections import defaultdict
 import abc
 
 
@@ -30,28 +29,29 @@ class Concept(object):
 
     @abc.abstractmethod
     def preprocess(self, raw_input):
-        """This function is responsible for encoding an raw_input object to a 
-        dict of feature names and a corresponding TensorFlow Example protobuffers"""
+        """This function is responsible for encoding an raw_input object to a dict
+        of feature names and a corresponding TensorFlow Example protobuffers"""
         raise NotImplementedError(
             'The base class needs to implement "encode"')
 
     @abc.abstractmethod
     def featdef(self):
         """This function defines thet interface between encode and model:
-            Returns a dictionary of feature names and tf FeatureEncodingTypes"""
+        Returns a dictionary of feature names and tf FeatureEncodingTypes"""
         raise NotImplementedError(
             'The base class needs to implement "featdef"')
 
     @abc.abstractmethod
     def inference(self, features):
-        """This function takes a dictionary of tensors(features) and 
-        specifies the Tensorflow operations to transform these into a single tensor"""
+        """This function takes a dictionary of tensors(features) and specifies
+        the Tensorflow operations to transform these into a single tensor"""
         raise NotImplementedError(
             'The base class needs to implement "model"')
 
     @classmethod
     def get_children(cls):
-        """Helper function to get the list of all children in the global namespace"""
+        """Helper function to get the list of all children in the global
+        namespace"""
         import sys
         import inspect
         subclasses = []
@@ -104,7 +104,7 @@ class Concept(object):
             try:
                 vector = embedding.eval()
                 logging.info('vector : %s', str(vector))
-            except tf.errors.OutOfRangeError, e:
+            except tf.errors.OutOfRangeError as e:
                 coord.request_stop(e)
             finally:
                 coord.request_stop()
