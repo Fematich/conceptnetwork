@@ -12,7 +12,8 @@ setup(
     name='conceptnetwork',
     version='0.1.0',
 
-    description='TensorFlow&CloudML helper function for complex data processing.',
+    description='DataFlow&CloudML helper function for \
+    complex data processing.',
     long_description=long_description,
 
     url='https://github.com/Fematich/conceptnetwork',
@@ -21,7 +22,7 @@ setup(
     author='Matthias Feys',
     author_email='matthiasfeys@gmail.com',
 
-    packages=find_packages(exclude=['examples','docs', 'tests']),
+    packages=find_packages(exclude=['examples', 'docs', 'tests']),
 
     install_requires=['tensorflow==1.0.0'],
 )
