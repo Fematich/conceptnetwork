@@ -1,6 +1,7 @@
 #!/usr/bin/python
 
 import logging
+import re
 from collections import defaultdict
 import abc
 
@@ -8,12 +9,17 @@ import abc
 class Concept(object):
     """Base class for Concepts"""
 
-    def __init__(self,target=False):
+    def __init__(self, target=False):
         __metaclass__ = abc.ABCMeta
-        self.target=target
+        self.target = target
 
     def __repr__(self):
-        return self.__class__.__name__ + self.version
+        return self.__class__.__name__ + self.version.replace('.', '')
+
+    def _short_repr(self):
+        abrev = ''.join([s[:2] for s in re.split(
+            "([A-Z][^A-Z]*)", self.__class__.__name__) if s])
+        return abrev + self.version.replace('.', '')
 
     @abc.abstractmethod
     def _get_test_input(self):
@@ -61,7 +67,8 @@ class Concept(object):
     def _test(cls):
         """test is resposible for testing an individual Concept class"""
         import tensorflow as tf
-
+        temp_file = '../data/test_concept.tfrecords'
+        num_examples = 32
         self = cls()
         logging.info('\n' + '*' * 50 + '\n' + '*' * 50)
         logging.info('Test Concept : %s', self)
@@ -69,16 +76,36 @@ class Concept(object):
         example = tf.train.Example(
             features=tf.train.Features(feature=features))
         serialized_example = example.SerializeToString()
-        logging.info('Successfully serialized tfrecord')
+        writer = tf.python_io.TFRecordWriter(temp_file)
+        for _ in range(num_examples):
+            writer.write(example.SerializeToString())
+        writer.close()
+        logging.info('Successfully serialized %i tfrecord(s)' % num_examples)
 
-        reconstructed_features = tf.parse_single_example(
-            serialized_example,
+        reader = tf.TFRecordReader()
+        filename_queue = tf.train.string_input_producer(
+            [temp_file], num_epochs=1)
+        _, serialized_example = reader.read(filename_queue)
+        batch = tf.train.batch([serialized_example],
+                               num_examples, capacity=num_examples)
+        reconstructed_features = tf.parse_example(
+            batch,
             features=self.featdef(),
             name='reconstruct_features')
         logging.info('Successfully reconstructed tfrecord')
 
         embedding = self.inference(reconstructed_features)
-        with tf.Session():
-            tf.global_variables_initializer().run()
-            vector = embedding.eval()
-            logging.info('vector : %s', str(vector))
+        with tf.Session() as sess:
+            init_op = tf.group(tf.global_variables_initializer(),
+                               tf.local_variables_initializer())
+            sess.run(init_op)
+            coord = tf.train.Coordinator()
+            threads = tf.train.start_queue_runners(coord=coord)
+            try:
+                vector = embedding.eval()
+                logging.info('vector : %s', str(vector))
+            except tf.errors.OutOfRangeError, e:
+                coord.request_stop(e)
+            finally:
+                coord.request_stop()
+                coord.join(threads)

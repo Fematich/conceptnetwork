@@ -1,6 +1,7 @@
 #!/usr/bin/python
 import logging
 import abc
+import re
 from collections import defaultdict
 import tensorflow as tf
 from tensorflow.python.lib.io.tf_record import TFRecordCompressionType
@@ -59,8 +60,10 @@ class Network(object):
         return vectors
 
     def __repr__(self):
-        return self.__class__.__name__ + self.version + '__' + \
-            '_'.join([str(c) for c in self.concepts.values()])
+        abrev = ''.join([s[:3] for s in re.split(
+            "([A-Z][^A-Z]*)", self.__class__.__name__) if s])
+        return abrev + self.version.replace('.','') + '__' + \
+            '_'.join([c._short_repr() for c in self.concepts.values()])
 
     @abc.abstractmethod
     def _get_test_input(self):
@@ -212,24 +215,35 @@ class Network(object):
 
     @classmethod
     def _test(cls):
-        """test is resposible for testing a Network class"""
+        temp_file = '../data/test_network.tfrecords'
+        num_examples = 32
         self = cls()
         logging.info('\n' + '*' * 50 + '\n' + '*' * 50)
         logging.info('\n' + '*' * 50 + '\n' + '*' * 50)
         logging.info('Test Network : %s', self)
         example = self.preprocess(self._get_test_input())
-        serialized_example = example.SerializeToString()
-        logging.info('Successfully serialized tfrecord')
 
-        reconstructed_features = tf.parse_single_example(
-            serialized_example,
+        serialized_example = example.SerializeToString()
+        writer = tf.python_io.TFRecordWriter(temp_file)
+        for _ in range(num_examples):
+            writer.write(example.SerializeToString())
+        writer.close()
+        logging.info('Successfully serialized %i tfrecord(s)' % num_examples)
+
+        reader = tf.TFRecordReader()
+        filename_queue = tf.train.string_input_producer(
+            [temp_file], num_epochs=1)
+        _, serialized_example = reader.read(filename_queue)
+        batch = tf.train.batch([serialized_example],
+                               num_examples, capacity=num_examples)
+        reconstructed_features = tf.parse_example(
+            batch,
             features=self.featdef(),
             name='reconstruct_features')
         logging.info('Successfully reconstructed tfrecord')
 
         target = dict()
         features = dict()
-
         for f_name, feature in reconstructed_features.iteritems():
             c_name = f_name.split('_')[0]
             if c_name in self.target_names:
@@ -237,19 +251,22 @@ class Network(object):
             else:
                 features[f_name] = feature
         features, labels = self.feature_engineering_fn(features, target)
-        new_features = dict()
-        for k, v in features.iteritems():
-            v_length = int(v.get_shape()[0])
-            new_features[k] = tf.reshape(v, (1, v_length))
-        new_labels = dict()
-        for k, v in labels.iteritems():
-            v_length = int(v.get_shape()[0])
-            new_labels[k] = tf.reshape(v, (1, v_length))
-        predictions = self.inference(new_features)
-        loss = self.loss(predictions, new_labels)
-        with tf.Session():
-            tf.global_variables_initializer().run()
-            vector = predictions['logits'].eval()
-            logging.info('vector : %s', str(vector))
-            losses = loss.eval()
-            logging.info('loss : %s', str(losses))
+        predictions = self.inference(features)
+        loss = self.loss(predictions, labels)
+
+        with tf.Session() as sess:
+            init_op = tf.group(tf.global_variables_initializer(),
+                               tf.local_variables_initializer())
+            sess.run(init_op)
+            coord = tf.train.Coordinator()
+            threads = tf.train.start_queue_runners(coord=coord)
+            try:
+                vector = predictions['logits'].eval()
+                logging.info('vector : %s', str(vector))
+                losses = loss.eval()
+                logging.info('loss : %s', str(losses))
+            except tf.errors.OutOfRangeError, e:
+                coord.request_stop(e)
+            finally:
+                coord.request_stop()
+                coord.join(threads)
