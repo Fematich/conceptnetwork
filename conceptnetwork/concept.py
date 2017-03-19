@@ -41,6 +41,11 @@ class Concept(object):
         raise NotImplementedError(
             'The base class needs to implement "featdef"')
 
+    def feature_engineering(self, features):
+        """This function does preprocessing/feature engineering for a single
+        concept"""
+        return features
+
     @abc.abstractmethod
     def inference(self, features):
         """This function takes a dictionary of tensors(features) and specifies

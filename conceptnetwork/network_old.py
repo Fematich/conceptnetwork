@@ -1,7 +1,7 @@
 #!/usr/bin/python
 import logging
 import abc
-import re
+from collections import defaultdict
 import tensorflow as tf
 from tensorflow.python.lib.io.tf_record import TFRecordCompressionType
 
@@ -12,27 +12,7 @@ class Network(object):
     def __init__(self):
         __metaclass__ = abc.ABCMeta
         self.concepts = dict()
-        self._feature_names = set()
-        self._target_names = set()
-
-    @property
-    def feature_names(self):
-        if len(self._feature_names) < 1:
-            self._targetandfeaturenames()
-        return self._feature_names
-
-    @property
-    def target_names(self):
-        if len(self._target_names) < 1:
-            self._targetandfeaturenames()
-        return self._target_names
-
-    def _targetandfeaturenames(self):
-        for cname, concept in self.concepts.items():
-            if concept.target:
-                self._target_names.add(cname)
-            else:
-                self._feature_names.add(cname)
+        self.label = None
 
     def _select_features(self, concept_key, features):
         """Select and translate features for this concept_key"""
@@ -42,27 +22,16 @@ class Network(object):
                 cfeatures['_'.join(k.split('_')[1:])] = v
         return cfeatures
 
-    def get_featurevectors(self, features):
+    def get_vectors(self, features):
         vectors = dict()
         for cname, concept in self.concepts.items():
-            if not concept.target:
-                vectors[cname] = concept.feature_engineering(
-                    self._select_features(cname, features))
-        return vectors
-
-    def get_targetvectors(self, features):
-        vectors = dict()
-        for cname, concept in self.concepts.items():
-            if concept.target:
-                vectors[cname] = concept.feature_engineering(
-                    self._select_features(cname, features))
+            vectors[cname] = concept.inference(
+                self._select_features(cname, features))
         return vectors
 
     def __repr__(self):
-        abrev = ''.join([s[:3] for s in re.split(
-            "([A-Z][^A-Z]*)", self.__class__.__name__) if s])
-        return abrev + self.version.replace('.', '') + '__' + \
-            '_'.join([c._short_repr() for c in self.concepts.values()])
+        return self.__class__.__name__ + self.version + '__' + \
+            '_'.join([str(c) for c in self.concepts.values()])
 
     @abc.abstractmethod
     def _get_test_input(self):
@@ -82,6 +51,8 @@ class Network(object):
             cfeatures = concept.preprocess(raw_input)
             for k, v in cfeatures.items():
                 features[cname + '_' + k] = v
+        if self.label is not None:
+            features['label'] = label.preprocess(raw_input)
         example = tf.train.Example(
             features=tf.train.Features(feature=features))
         return example
@@ -97,6 +68,8 @@ class Network(object):
             cfeatures_def = concept.featdef()
             for k, v in cfeatures_def.items():
                 features_def[cname + '_' + k] = v
+        if self.label is not None:
+            features_def['label'] = label.featdef()
         return features_def
 
     @abc.abstractmethod
@@ -113,14 +86,9 @@ class Network(object):
         raise NotImplementedError(
             'The base class needs to implement "loss"')
 
-    def feature_engineering_fn(self, features, labels):
-        return self.get_featurevectors(features),\
-            self.get_targetvectors(labels)
-
     def train(self, loss):
         """This function takes a dictionary of tensors(features) and
-        specifies the Tensorflow operations to transform these into a
-        single tensor"""
+        specifies the Tensorflow operations to transform these into a single tensor"""
         train_op = tf.contrib.layers.optimize_loss(
             loss=loss,
             global_step=tf.contrib.framework.get_global_step(),
@@ -134,13 +102,13 @@ class Network(object):
         Returns:
           A model function that can be passed to `Estimator` constructor.
         """
-        def _model_fn(features, labels, mode):
+        def _model_fn(features, labels, mode, input_dir):
             """Creates the prediction and its loss.
 
             Args:
               features: A dictionary of tensors keyed by the feature name.
               labels: A tensor representing the labels.
-              mode: The execution mode, defined in tf.contrib.learn.ModeKeys.
+              mode: The execution mode, as defined in tf.contrib.learn.ModeKeys.
 
             Returns:
               A tuple consisting of the prediction, loss, and train_op.
@@ -177,15 +145,15 @@ class Network(object):
               the feature names, and 2) a tensor of target labels if the mode
               is not INFER (and None, otherwise).
             """
+            input_files = sorted(list(tf.gfile.Glob(input_dir)))
             logging.info("Reading files from %s", input_dir)
+            include_target_column = (mode != tf.contrib.learn.ModeKeys.INFER)
 
-            def gzip_reader():
-                return tf.TFRecordReader(
-                    options=tf.python_io.TFRecordOptions(
-                        compression_type=TFRecordCompressionType.GZIP))
-            reader_fn = gzip_reader
+            reader_fn = tf.TFRecordReader(
+                options=tf.python_io.TFRecordOptions(
+                    compression_type=TFRecordCompressionType.GZIP))
 
-            all_features = tf.contrib.learn.io.read_batch_features(
+            features = tf.contrib.learn.io.read_batch_features(
                 file_pattern=input_dir,
                 batch_size=batch_size,
                 queue_capacity=3 * batch_size,
@@ -193,74 +161,32 @@ class Network(object):
                 feature_queue_capacity=5,
                 reader=reader_fn,
                 features=self.featdef())
-            target = dict()
-            features = dict()
-            for f_name, feature in all_features.iteritems():
-                c_name = f_name.split('_')[0]
-                if c_name in self.target_names:
-                    target[f_name] = feature
-                else:
-                    features[f_name] = feature
-            if len(target) < 1:
-                target = None
+            target = None
+            if include_target_column:
+                target = features.pop('label')
             return features, target
 
         return _input_fn
 
     @classmethod
     def _test(cls):
-        temp_file = '../data/test_network.tfrecords'
-        num_examples = 32
+        """test is resposible for testing a Network class"""
         self = cls()
         logging.info('\n' + '*' * 50 + '\n' + '*' * 50)
         logging.info('\n' + '*' * 50 + '\n' + '*' * 50)
         logging.info('Test Network : %s', self)
         example = self.preprocess(self._get_test_input())
-
         serialized_example = example.SerializeToString()
-        writer = tf.python_io.TFRecordWriter(temp_file)
-        for _ in range(num_examples):
-            writer.write(example.SerializeToString())
-        writer.close()
-        logging.info('Successfully serialized %i tfrecord(s)' % num_examples)
+        logging.info('Successfully serialized tfrecord')
 
-        reader = tf.TFRecordReader()
-        filename_queue = tf.train.string_input_producer(
-            [temp_file], num_epochs=1)
-        _, serialized_example = reader.read(filename_queue)
-        batch = tf.train.batch([serialized_example],
-                               num_examples, capacity=num_examples)
-        reconstructed_features = tf.parse_example(
-            batch,
+        reconstructed_features = tf.parse_single_example(
+            serialized_example,
             features=self.featdef(),
             name='reconstruct_features')
         logging.info('Successfully reconstructed tfrecord')
 
-        target = dict()
-        features = dict()
-        for f_name, feature in reconstructed_features.iteritems():
-            c_name = f_name.split('_')[0]
-            if c_name in self.target_names:
-                target[f_name] = feature
-            else:
-                features[f_name] = feature
-        features, labels = self.feature_engineering_fn(features, target)
-        predictions = self.inference(features)
-        loss = self.loss(predictions, labels)
-
-        with tf.Session() as sess:
-            init_op = tf.group(tf.global_variables_initializer(),
-                               tf.local_variables_initializer())
-            sess.run(init_op)
-            coord = tf.train.Coordinator()
-            threads = tf.train.start_queue_runners(coord=coord)
-            try:
-                vector = predictions['logits'].eval()
-                logging.info('vector : %s', str(vector))
-                losses = loss.eval()
-                logging.info('loss : %s', str(losses))
-            except tf.errors.OutOfRangeError as e:
-                coord.request_stop(e)
-            finally:
-                coord.request_stop()
-                coord.join(threads)
+        embedding = self.inference(reconstructed_features)
+        with tf.Session():
+            tf.global_variables_initializer().run()
+            vector = embedding["logits"].eval()
+            logging.info('vector : %s', str(vector))
