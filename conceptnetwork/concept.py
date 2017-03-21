@@ -8,9 +8,12 @@ import abc
 class Concept(object):
     """Base class for Concepts"""
 
-    def __init__(self, target=False):
+    def __init__(self, target=False, checkpoint_path=None):
         __metaclass__ = abc.ABCMeta
+        if target and checkpoint_path:
+            raise ValueError("Concept cannot be restored from checkpoint if it's a target")
         self.target = target
+        self.checkpoint_path = checkpoint_path
 
     def __repr__(self):
         return self.__class__.__name__ + self.version.replace('.', '')

@@ -24,5 +24,5 @@ setup(
 
     packages=find_packages(exclude=['examples', 'docs', 'tests']),
 
-    install_requires=['tensorflow==1.0.0'],
+    install_requires=['tensorflow==1.0.1'],
 )
