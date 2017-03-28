@@ -209,6 +209,7 @@ class Network(object):
 
     @classmethod
     def _test(cls):
+        tf.reset_default_graph()
         temp_file = '../data/test_network.tfrecords'
         num_examples = 32
         self = cls()
