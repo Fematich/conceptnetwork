@@ -114,8 +114,12 @@ class Network(object):
             'The base class needs to implement "loss"')
 
     def feature_engineering_fn(self, features, labels):
-        return self.get_featurevectors(features),\
-            self.get_targetvectors(labels)
+        if labels != None:
+            return self.get_featurevectors(features),\
+                self.get_targetvectors(labels)
+        else:
+            return self.get_featurevectors(features),\
+                None
 
     def train(self, loss):
         """This function takes a dictionary of tensors(features) and
