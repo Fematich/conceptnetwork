@@ -11,7 +11,8 @@ class Concept(object):
     def __init__(self, target=False, checkpoint_path=None):
         __metaclass__ = abc.ABCMeta
         if target and checkpoint_path:
-            raise ValueError("Concept cannot be restored from checkpoint if it's a target")
+            raise ValueError(
+                "Concept cannot be restored from checkpoint if it's a target")
         self.target = target
         self.checkpoint_path = checkpoint_path
 
@@ -110,8 +111,9 @@ class Concept(object):
             coord = tf.train.Coordinator()
             threads = tf.train.start_queue_runners(coord=coord)
             try:
-                vector = embedding.eval()
-                logging.info('vector : %s', str(vector))
+                if embedding is not None:
+                    vector = embedding.eval()
+                    logging.info('vector : %s', str(vector))
             except tf.errors.OutOfRangeError as e:
                 coord.request_stop(e)
             finally:

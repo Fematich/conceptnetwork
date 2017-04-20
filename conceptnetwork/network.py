@@ -37,7 +37,7 @@ class Network(object):
     def _select_features(self, concept_key, features):
         """Select and translate features for this concept_key"""
         cfeatures = dict()
-        for k, v in features.items():
+        for k, v in features.iteritems():
             if k.startswith(concept_key):
                 cfeatures['_'.join(k.split('_')[1:])] = v
         return cfeatures
@@ -188,12 +188,16 @@ class Network(object):
                     options=tf.python_io.TFRecordOptions(
                         compression_type=TFRecordCompressionType.GZIP))
             reader_fn = gzip_reader
+            num_epochs = None
+            if mode == tf.contrib.learn.ModeKeys.EVAL:
+                num_epochs = 1
 
             all_features = tf.contrib.learn.io.read_batch_features(
                 file_pattern=input_dir,
                 batch_size=batch_size,
                 queue_capacity=3 * batch_size,
                 randomize_input=mode == tf.contrib.learn.ModeKeys.TRAIN,
+                num_epochs=num_epochs,
                 feature_queue_capacity=5,
                 reader=reader_fn,
                 features=self.featdef())
