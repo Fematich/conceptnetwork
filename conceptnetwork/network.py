@@ -189,7 +189,7 @@ class Network(object):
                         compression_type=TFRecordCompressionType.GZIP))
             reader_fn = gzip_reader
             num_epochs = None
-            if mode == tf.contrib.learn.ModeKeys.EVAL:
+            if mode != tf.contrib.learn.ModeKeys.TRAIN:
                 num_epochs = 1
 
             all_features = tf.contrib.learn.io.read_batch_features(
