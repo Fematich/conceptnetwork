@@ -10,7 +10,7 @@ with open(path.join(here, 'README.md'), encoding='utf-8') as f:
 
 setup(
     name='conceptnetwork',
-    version='0.1.0',
+    version='0.1.1',
 
     description='DataFlow&CloudML helper function for \
     complex data processing.',
@@ -24,7 +24,7 @@ setup(
 
     packages=find_packages(exclude=['examples', 'docs', 'tests']),
 
-    install_requires=['tensorflow==1.0.1'],
+    install_requires=['tensorflow==1.1'],
 )
 
 
